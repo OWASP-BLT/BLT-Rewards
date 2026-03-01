@@ -1,12 +1,11 @@
 {
-  "name": "blt-bacon-worker",
+  "name": "blt-rewards-worker",
   "main": "src/entry.py",
   "compatibility_flags": [
     "python_workers"
   ],
-  "compatibility_date": "2026-02-17",
+  "compatibility_date": "2026-03-01",
   "vars": {
-    "ORD_PATH": "/usr/local/bin/ord",
-    "YAML_FILE_PATH": "/tmp/batch.yaml"
+    "SUPPORTED_PROTOCOLS": "bitcoin-runes,solana"
   }
 }

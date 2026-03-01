@@ -1,7 +1,7 @@
 [project]
-name = "blt-bacon-worker"
+name = "blt-rewards-worker"
 version = "1.0.0"
-description = "BACON Token Distribution Service - Cloudflare Python Worker"
+description = "BLT Rewards Distribution Service - Multi-chain Cloudflare Python Worker"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
