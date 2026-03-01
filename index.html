@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLT-BACON Token Distribution Service</title>
+    <title>BLT-Rewards Distribution Service</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -20,8 +20,8 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         h1 {
-            color: #e74c3c;
-            border-bottom: 3px solid #e74c3c;
+            color: #3498db;
+            border-bottom: 3px solid #3498db;
             padding-bottom: 10px;
         }
         h2 {
@@ -73,23 +73,30 @@
 </head>
 <body>
     <div class="container">
-        <h1>🥓 BLT-BACON Token Distribution Service</h1>
+        <h1>🎁 BLT-Rewards Distribution Service</h1>
         
         <p>
-            <strong>BACON (Blockchain Assisted Contribution Network)</strong> is a Bitcoin-based token 
-            distribution service for the OWASP BLT project. This service handles the distribution of 
-            BACON tokens using the Bitcoin Runes protocol.
+            <strong>BLT-Rewards</strong> is a blockchain-agnostic rewards distribution service for the OWASP BLT project. 
+            This service handles the distribution of rewards tokens across multiple blockchain protocols including 
+            Bitcoin Runes (BACON tokens), Solana, and more.
         </p>
 
         <h2>📡 API Endpoints</h2>
 
         <div class="endpoint">
             <span class="method post">POST</span>
-            <strong>/mainnet/send-bacon-tokens</strong>
-            <p>Send BACON tokens on Bitcoin mainnet.</p>
+            <strong>/{protocol}/send-rewards</strong>
+            <p>Send rewards on any supported blockchain protocol.</p>
+            <p><strong>Supported Protocols:</strong> bitcoin-runes, solana</p>
             <p><strong>Request Body:</strong></p>
             <pre><code>{
-  "yaml_content": "outputs:\n- address: bc1...\n  runes:\n    BLT•BACON•TOKENS: 10",
+  "recipients": [
+    {
+      "address": "bc1...",
+      "amount": 10,
+      "token": "BLT•BACON•TOKENS"
+    }
+  ],
   "fee_rate": 50,
   "dry_run": true,
   "password": "your_password"  // Required when dry_run is false
@@ -98,23 +105,30 @@
 
         <div class="endpoint">
             <span class="method post">POST</span>
-            <strong>/regtest/send-bacon-tokens</strong>
-            <p>Send BACON tokens on Bitcoin regtest (for testing).</p>
+            <strong>/{protocol}/send-rewards-test</strong>
+            <p>Send rewards on testnet/regtest for testing.</p>
             <p><strong>Request Body:</strong></p>
             <pre><code>{
+  "protocol": "bitcoin-runes",
   "num_users": 5,
+  "amount_per_user": 1,
   "fee_rate": 50
 }</code></pre>
         </div>
 
         <div class="endpoint">
             <span class="method get">GET</span>
-            <strong>/mainnet/wallet-balance</strong>
-            <p>Get the current wallet balance on mainnet.</p>
+            <strong>/{protocol}/wallet-balance</strong>
+            <p>Get the current wallet balance for a specific protocol.</p>
+            <p><strong>Example:</strong> <code>/bitcoin-runes/wallet-balance</code></p>
             <p><strong>Response:</strong></p>
             <pre><code>{
   "success": true,
-  "balance": "..."
+  "protocol": "bitcoin-runes",
+  "balance": "...",
+  "tokens": {
+    "BLT•BACON•TOKENS": 1000
+  }
 }</code></pre>
         </div>
 
@@ -125,8 +139,9 @@
             <p><strong>Response:</strong></p>
             <pre><code>{
   "status": "healthy",
-  "service": "BLT-BACON Token Distribution Service",
-  "version": "1.0.0"
+  "service": "BLT-Rewards Distribution Service",
+  "version": "1.0.0",
+  "supported_protocols": ["bitcoin-runes", "solana"]
 }</code></pre>
         </div>
 
@@ -138,11 +153,12 @@
             <li>Node.js 14+</li>
             <li><code>uv</code> package manager</li>
             <li>Cloudflare Workers account</li>
+            <li>Protocol-specific blockchain nodes</li>
         </ul>
 
         <h3>Installation</h3>
         <pre><code># Install dependencies
-uv pip install -r requirements.txt
+uv pip install pyyaml
 
 # Configure environment variables
 cp .env.example .env
@@ -155,12 +171,8 @@ uv run pywrangler deploy</code></pre>
         
         <p>The service requires the following environment variables:</p>
         <ul>
-            <li><code>ORD_PATH</code> - Path to ord binary</li>
-            <li><code>BITCOIN_RPC_USER_MAINNET</code> - Bitcoin RPC username for mainnet</li>
-            <li><code>BITCOIN_RPC_PASSWORD_MAINNET</code> - Bitcoin RPC password for mainnet</li>
-            <li><code>BITCOIN_RPC_URL_MAINNET</code> - Bitcoin RPC URL for mainnet</li>
-            <li><code>ORD_SERVER_URL_MAINNET</code> - Ordinal server URL for mainnet</li>
-            <li><code>WALLET_NAME_MAINNET</code> - Wallet name for mainnet</li>
+            <li><code>BACKEND_URLS</code> - JSON map of protocol -> backend URL</li>
+            <li><code>SUPPORTED_PROTOCOLS</code> - Comma-separated list of protocols</li>
             <li><code>WALLET_API_PASSWORD</code> - API password for transaction authorization</li>
         </ul>
 
@@ -168,8 +180,8 @@ uv run pywrangler deploy</code></pre>
         
         <p>For more information, visit:</p>
         <ul>
-            <li><a href="https://github.com/OWASP-BLT/BLT-Bacon">GitHub Repository</a></li>
-            <li><a href="https://owasp-blt.github.io/BLT-Bacon/">Full Documentation</a></li>
+            <li><a href="https://github.com/OWASP-BLT/BLT-Rewards">GitHub Repository</a></li>
+            <li><a href="https://owasp-blt.github.io/BLT-Rewards/">Full Documentation</a></li>
             <li><a href="https://owaspblt.org/">OWASP BLT Project</a></li>
         </ul>
 
