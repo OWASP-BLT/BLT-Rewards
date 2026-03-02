@@ -16,3 +16,4 @@ __pycache__/
 ord-server/.env
 ord-server/__pycache__/
 ord-server/*.log
+*-cwd
