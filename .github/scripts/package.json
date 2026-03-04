@@ -1,0 +1,14 @@
+{
+  "name": "bacon-reward-scripts",
+  "version": "1.0.0",
+  "description": "On-chain BACON token reward scripts for GitHub Actions",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "^4.0.1"
+  }
+}
