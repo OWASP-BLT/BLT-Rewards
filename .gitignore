@@ -1,0 +1,11 @@
+*-cwd
+
+# Python env
+.env
+
+# Node / npm
+node_modules/
+.github/scripts/node_modules/
+
+# Generated treasury keypair — NEVER commit this
+.github/scripts/bacon-treasury-keypair.json

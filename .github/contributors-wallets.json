@@ -1,0 +1,10 @@
+{
+  "_comment": "Map GitHub usernames to Solana wallet addresses for BACON rewards.",
+  "_instructions": [
+    "Add contributors' Solana wallet addresses here.",
+    "The key is the GitHub username (lowercase); the value is the base58 Solana public key.",
+    "Example entry below — replace or remove it.",
+    "Alternatively, contributors can include 'SOLANA_WALLET: <address>' in their PR description."
+  ],
+  "example-contributor": "11111111111111111111111111111111"
+}
