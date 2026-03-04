@@ -1,0 +1,144 @@
+name: BACON On-Chain Reward — PR Merged
+
+# Triggers only when a PR is actually merged (not just closed)
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  reward-contributor:
+    name: Send BACON Tokens to Contributor
+    # Guard: skip if the PR was closed without merging
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: write   # needed to post the result comment
+      contents: read
+
+    steps:
+      # ── 1. Checkout so scripts/ and contributors-wallets.json are available ──
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js runtime ────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: .github/scripts/package-lock.json
+
+      # ── 3. Install Solana SDK deps ────────────────────────────────────────────
+      - name: Install dependencies
+        working-directory: .github/scripts
+        run: npm ci
+
+      # ── 4. Calculate reward amount based on PR size ───────────────────────────
+      - name: Calculate reward amount
+        id: reward
+        env:
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        run: |
+          additions=${{ github.event.pull_request.additions }}
+
+          if   [ "$additions" -gt 500 ]; then amount=100
+          elif [ "$additions" -gt 100 ]; then amount=50
+          elif [ "$additions" -gt 20  ]; then amount=20
+          else                                amount=10
+          fi
+
+          echo "amount=$amount" >> "$GITHUB_OUTPUT"
+          echo "PR +${additions} lines → reward: ${amount} BACON tokens"
+
+      # ── 5. Execute the on-chain transfer ──────────────────────────────────────
+      - name: Send on-chain BACON reward
+        id: send_reward
+        env:
+          # Treasury wallet: JSON array  [1,2,3,...] or base58 private key string
+          BACON_TREASURY_KEYPAIR: ${{ secrets.BACON_TREASURY_KEYPAIR }}
+          # SPL token mint address on devnet, e.g. "6Xn7…"
+          BACON_TOKEN_MINT: ${{ secrets.BACON_TOKEN_MINT }}
+
+          CONTRIBUTOR_GITHUB: ${{ github.event.pull_request.user.login }}
+          REWARD_AMOUNT: ${{ steps.reward.outputs.amount }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          # Change to 'mainnet-beta' for production
+          SOLANA_NETWORK: devnet
+        run: node .github/scripts/send-bacon-reward.js
+
+      # ── 6. Post result comment on the PR ─────────────────────────────────────
+      - name: Comment reward result on PR
+        if: always() && steps.send_reward.outcome != 'skipped'
+        uses: actions/github-script@v7
+        env:
+          REWARD_STATUS: ${{ steps.send_reward.outputs.status }}
+          REWARD_TXID:   ${{ steps.send_reward.outputs.txid }}
+          REWARD_AMOUNT: ${{ steps.reward.outputs.amount }}
+          SKIP_REASON:   ${{ steps.send_reward.outputs.reason }}
+          SOLANA_NETWORK: devnet
+        with:
+          script: |
+            const status  = process.env.REWARD_STATUS;
+            const txid    = process.env.REWARD_TXID;
+            const amount  = process.env.REWARD_AMOUNT;
+            const reason  = process.env.SKIP_REASON;
+            const network = process.env.SOLANA_NETWORK;
+            const contributor = '${{ github.event.pull_request.user.login }}';
+
+            let body;
+
+            if (status === 'success' && txid) {
+              const explorerUrl =
+                `https://explorer.solana.com/tx/${txid}?cluster=${network}`;
+              body = [
+                '## 🥓 BACON Reward Sent!',
+                '',
+                `Thank you @${contributor} for your contribution!`,
+                `**${amount} BACON tokens** have been transferred on-chain.`,
+                '',
+                '| Field | Value |',
+                '|---|---|',
+                `| Recipient | @${contributor} |`,
+                `| Amount | ${amount} BACON |`,
+                `| Network | Solana ${network} |`,
+                `| Transaction | [\`${txid.slice(0,16)}…\`](${explorerUrl}) |`,
+                '',
+                '*Powered by [BACON – Blockchain Assisted Contribution Network](https://owasp-blt.github.io/BLT-Rewards/)*',
+              ].join('\n');
+
+            } else if (status === 'skipped') {
+              body = [
+                '## 🥓 BACON Reward Pending',
+                '',
+                `Hey @${contributor}! Your contribution qualifies for **${amount} BACON tokens**,`,
+                "but we don't have your Solana wallet address on file yet.",
+                '',
+                '**To receive your reward**, do one of the following:',
+                '1. Add your address to [`.github/contributors-wallets.json`](.github/contributors-wallets.json)',
+                '2. Include this line anywhere in a PR description going forward:',
+                '   ```',
+                '   SOLANA_WALLET: <your-solana-address>',
+                '   ```',
+                '',
+                reason ? `> ${reason}` : '',
+              ].join('\n');
+
+            } else {
+              body = [
+                '## 🥓 BACON Reward — Transfer Failed',
+                '',
+                `@${contributor} — we tried to send **${amount} BACON tokens** but hit an error.`,
+                'The maintainers have been notified.',
+                reason ? `\n> ${reason}` : '',
+              ].join('\n');
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

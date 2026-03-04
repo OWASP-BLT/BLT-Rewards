@@ -6,6 +6,7 @@
 # Node / npm
 node_modules/
 .github/scripts/node_modules/
+PROJECT_INFO.md
 
 # Generated treasury keypair — NEVER commit this
 .github/scripts/bacon-treasury-keypair.json
