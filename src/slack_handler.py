@@ -254,25 +254,35 @@ async def handle_bacon_command(request, env):
       5. Persist transfer to D1
       6. Respond to Slack
     """
-    from js import Response  # Cloudflare Workers JS interop
+    from js import Response, Object  # Cloudflare Workers JS interop
+    from pyodide.ffi import to_js
 
-    json_headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-    }
+    def make_response(body: str, status: int = 200) -> object:
+        """
+        Build a Response with Content-Type: application/json.
+        to_js + dict_converter=Object.fromEntries converts the Python dict into
+        a real JS plain object so that the Response constructor sees proper headers.
+        A raw Python dict becomes a pyodide proxy which the Response constructor
+        silently ignores, causing Slack to receive text/plain and display raw JSON.
+        """
+        init = to_js(
+            {"status": status, "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}},
+            dict_converter=Object.fromEntries,
+        )
+        return Response.new(body, init)
 
     # Global safety net: any unhandled exception must return a valid Slack
     # response (HTTP 200) rather than crashing the Worker, because a crash
     # causes Cloudflare to return a 1101/530 error which Slack reports as
     # "dispatch_failed".
     try:
-        return await _handle_bacon_inner(request, env, Response, json_headers)
+        return await _handle_bacon_inner(request, env, make_response)
     except Exception as exc:
         payload = _slack_response(f":x: Internal error: {exc}")
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
 
-async def _handle_bacon_inner(request, env, Response, json_headers):
+async def _handle_bacon_inner(request, env, make_response):
     """Inner handler – all exceptions bubble up to handle_bacon_command's safety net."""
     # ------------------------------------------------------------------ #
     # 1. Read raw body (needed for signature verification)                 #
@@ -281,7 +291,7 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
         body_text = await request.text()
     except Exception:
         payload = _slack_response(":x: Could not read request body.")
-        return Response.new(json.dumps(payload), {"status": 400, "headers": json_headers})
+        return make_response(json.dumps(payload), 400)
 
     # ------------------------------------------------------------------ #
     # 2. Verify Slack signature                                            #
@@ -294,7 +304,7 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
         signature = request.headers.get("X-Slack-Signature") or ""
         if not _verify_slack_signature(signing_secret, body_text, timestamp, signature):
             payload = _slack_response(":x: Request signature verification failed.")
-            return Response.new(json.dumps(payload), {"status": 401, "headers": json_headers})
+            return make_response(json.dumps(payload), 401)
 
     # ------------------------------------------------------------------ #
     # 3. Parse form body                                                   #
@@ -325,7 +335,7 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
             "  `/bacon list`           – _(admins)_ Show the allowlist"
         )
         payload = _slack_response(usage)
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     # ------------------------------------------------------------------ #
     # 5. Authorize the sender                                              #
@@ -340,7 +350,7 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
             ":no_entry: You are not authorized to use `/bacon`.\n"
             "Ask a workspace admin to run `/bacon approve @you`."
         )
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     # ------------------------------------------------------------------ #
     # 6. Dispatch sub-commands (admin only)                                #
@@ -350,28 +360,28 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
     if lower.startswith("approve "):
         if not is_admin:
             payload = _slack_response(":no_entry: Only workspace admins can approve users.")
-            return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+            return make_response(json.dumps(payload))
         arg = command_text[len("approve "):].strip()
         msg = await _handle_approve(sender_id, sender_name, arg, env)
         payload = _slack_response(msg)
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     if lower.startswith("remove "):
         if not is_admin:
             payload = _slack_response(":no_entry: Only workspace admins can remove users.")
-            return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+            return make_response(json.dumps(payload))
         arg = command_text[len("remove "):].strip()
         msg = await _handle_remove(sender_id, arg, env)
         payload = _slack_response(msg)
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     if lower == "list":
         if not is_admin:
             payload = _slack_response(":no_entry: Only workspace admins can list approved users.")
-            return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+            return make_response(json.dumps(payload))
         msg = await _handle_list(env)
         payload = _slack_response(msg)
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     # ------------------------------------------------------------------ #
     # 7. Parse transfer: /bacon @user <amount>                             #
@@ -384,11 +394,11 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
             "*Usage:* `/bacon @user <amount>`  |  `/bacon approve @user`  |  `/bacon list`"
         )
         payload = _slack_response(error_msg)
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     if amount <= 0:
         payload = _slack_response(":x: Amount must be greater than 0.")
-        return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+        return make_response(json.dumps(payload))
 
     # ------------------------------------------------------------------ #
     # 8. Persist transfer to D1                                            #
@@ -414,4 +424,4 @@ async def _handle_bacon_inner(request, env, Response, json_headers):
         f"Keep contributing to earn more! :rocket:"
     )
     payload = _slack_response(success_msg, response_type="in_channel")
-    return Response.new(json.dumps(payload), {"status": 200, "headers": json_headers})
+    return make_response(json.dumps(payload))
