@@ -10,3 +10,20 @@ PROJECT_INFO.md
 
 # Generated treasury keypair — NEVER commit this
 .github/scripts/bacon-treasury-keypair.json
+node_modules/
+.wrangler/
+.dev.vars
+.env
+*.log
+.DS_Store
+dist/
+.idea/
+.vscode/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# ord-server specific
+ord-server/.env
+ord-server/__pycache__/
+ord-server/*.log
