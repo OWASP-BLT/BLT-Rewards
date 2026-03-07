@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BACON Contributor Leaderboard - BLT Rewards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Use built Tailwind CSS in production; remove CDN for production use -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles/tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'blt-red': '#E10101',
+                        'blt-red-hover': '#b91c1c',
+                        'solana-purple': '#9945ff',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="styles/leaderboard.css">
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-chart-line text-blt-red text-2xl"></i>
+                    <h1 class="text-xl font-bold text-gray-900">BACON Leaderboard</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="refresh-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        <i class="fas fa-sync-alt mr-2"></i> Refresh
+                    </button>
+                    <span id="update-indicator" class="text-xs text-gray-500">
+                        <i class="fas fa-circle text-green-500 animate-pulse mr-1"></i>
+                        <span id="last-updated">Loading...</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Header Stats -->
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Total BACON Distributed -->
+                <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-6 border border-red-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <p class="text-sm font-medium text-gray-700">Total BACON Distributed</p>
+                        <i class="fas fa-coins text-blt-red text-xl"></i>
+                    </div>
+                    <p class="text-3xl font-bold text-blt-red"><span id="stat-total-bacon">0</span></p>
+                    <p class="text-xs text-gray-600 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i> Across all contributors
+                    </p>
+                </div>
+
+                <!-- Active Contributors -->
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <p class="text-sm font-medium text-gray-700">Active Contributors</p>
+                        <i class="fas fa-users text-solana-purple text-xl"></i>
+                    </div>
+                    <p class="text-3xl font-bold text-solana-purple"><span id="stat-contributors">0</span></p>
+                    <p class="text-xs text-gray-600 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i> Earned BACON rewards
+                    </p>
+                </div>
+
+                <!-- Recent Transaction -->
+                <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <p class="text-sm font-medium text-gray-700">Latest Reward</p>
+                        <i class="fas fa-star text-green-600 text-xl"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-900" id="stat-recent-user">No transactions yet</p>
+                    <p class="text-xs text-gray-600 mt-2">
+                        <span id="stat-recent-amount">0</span> BACON • <span id="stat-recent-time">—</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="bg-white border-b border-gray-200 sticky top-16 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex gap-8 overflow-x-auto">
+                <button class="tab-btn active px-4 py-4 font-medium text-gray-900 border-b-2 border-blt-red whitespace-nowrap" data-tab="leaderboard">
+                    <i class="fas fa-ranking-star mr-2"></i> Leaderboard
+                </button>
+                <button class="tab-btn px-4 py-4 font-medium text-gray-600 border-b-2 border-transparent hover:text-gray-900 whitespace-nowrap" data-tab="charts">
+                    <i class="fas fa-chart-bar mr-2"></i> Charts
+                </button>
+                <button class="tab-btn px-4 py-4 font-medium text-gray-600 border-b-2 border-transparent hover:text-gray-900 whitespace-nowrap" data-tab="transactions">
+                    <i class="fas fa-history mr-2"></i> Recent Activity
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Tab Content -->
+    <section id="leaderboard-tab" class="tab-content active">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Controls -->
+            <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div class="flex-1 max-w-xs">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                        <select id="ranking-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blt-red focus:border-transparent">
+                            <option value="bacon">Total BACON (Recommended)</option>
+                            <option value="pr-count">Number of PRs</option>
+                            <option value="avg-value">Average Value</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 max-w-xs">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Items Per Page</label>
+                        <select id="limit-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blt-red focus:border-transparent">
+                            <option value="25">25 contributors</option>
+                            <option value="50">50 contributors</option>
+                            <option value="100" selected>100 contributors</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button id="search-btn" class="px-4 py-2 bg-blt-red text-white rounded-lg hover:bg-blt-red-hover transition">
+                            <i class="fas fa-search mr-2"></i> Apply
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leaderboard Table -->
+            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div id="table-loading" class="p-8 text-center text-gray-500">
+                    <i class="fas fa-spinner fa-spin text-2xl mb-4"></i>
+                    <p>Loading leaderboard...</p>
+                </div>
+                <div id="table-container" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full" id="leaderboard-table">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700">Rank</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700">Contributor</th>
+                                    <th class="px-6 py-3 text-right text-xs font-semibold text-gray-700">Total BACON</th>
+                                    <th class="px-6 py-3 text-right text-xs font-semibold text-gray-700">PRs Merged</th>
+                                    <th class="px-6 py-3 text-right text-xs font-semibold text-gray-700">Avg Value</th>
+                                    <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700">Tier</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700">Wallet Address</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="divide-y divide-gray-200">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                        <p class="text-sm text-gray-600">
+                            Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+                            (<span id="total-count">0</span> total contributors)
+                        </p>
+                        <div class="flex gap-2">
+                            <button id="prev-page" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                                <i class="fas fa-chevron-left mr-1"></i> Previous
+                            </button>
+                            <button id="next-page" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                                Next <i class="fas fa-chevron-right ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="table-error" class="hidden p-8 text-center">
+                    <i class="fas fa-exclamation-triangle text-2xl text-red-500 mb-4"></i>
+                    <p class="text-gray-700">Failed to load leaderboard data</p>
+                    <p class="text-sm text-gray-500 mt-2">Please try refreshing the page</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Charts Tab Content -->
+    <section id="charts-tab" class="tab-content hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Distribution Timeline -->
+                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-chart-line text-blt-red mr-2"></i> Distribution Timeline (30 Days)
+                    </h3>
+                    <div class="relative h-80">
+                        <canvas id="distribution-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Contributors -->
+                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-trophy text-solana-purple mr-2"></i> Top 5 Contributors
+                    </h3>
+                    <div class="relative h-80">
+                        <canvas id="top-contributors-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tier Distribution -->
+                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-pie-chart text-green-600 mr-2"></i> Contributor Tiers
+                    </h3>
+                    <div class="relative h-80">
+                        <canvas id="tier-distribution-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-bars text-gray-600 mr-2"></i> Statistics
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+                            <span class="text-gray-700">Average per Contributor</span>
+                            <span class="font-semibold text-gray-900" id="stat-avg-per-contributor">0 BACON</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+                            <span class="text-gray-700">Highest Tier</span>
+                            <span class="font-semibold text-gray-900" id="stat-highest-tier">Legend</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+                            <span class="text-gray-700">Most Active Day</span>
+                            <span class="font-semibold text-gray-900" id="stat-active-day">—</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-700">Distribution Rate (BACON/day)</span>
+                            <span class="font-semibold text-gray-900" id="stat-rate">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Transactions Tab Content -->
+    <section id="transactions-tab" class="tab-content hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-6">
+                    <i class="fas fa-history text-blt-red mr-2"></i> Recent Rewards
+                </h3>
+                <div id="transactions-list" class="space-y-4">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-4"></i>
+                        <p>Loading transactions...</p>
+                    </div>
+                </div>
+
+                <!-- Pagination for Transactions -->
+                <div id="transactions-pagination" class="mt-6 flex items-center justify-between hidden">
+                    <p class="text-sm text-gray-600">
+                        Page <span id="tx-current-page">1</span> of <span id="tx-total-pages">1</span>
+                    </p>
+                    <div class="flex gap-2">
+                        <button id="tx-prev-page" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                            <i class="fas fa-chevron-left mr-1"></i> Previous
+                        </button>
+                        <button id="tx-next-page" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                            Next <i class="fas fa-chevron-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Loading Overlay -->
+    <div id="global-loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 text-center">
+            <i class="fas fa-spinner fa-spin text-3xl text-blt-red mb-4"></i>
+            <p class="text-gray-700 font-medium">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage-manager.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/data-processor.js"></script>
+    <script src="js/ui-renderer.js"></script>
+    <script src="js/chart-renderer.js"></script>
+    <script src="js/real-time-updater.js"></script>
+    <script src="js/leaderboard.js"></script>
+</body>
+</html>

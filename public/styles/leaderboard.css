@@ -1,0 +1,423 @@
+/* Leaderboard Dashboard Styles */
+
+:root {
+    --blt-red: #E10101;
+    --blt-red-hover: #b91c1c;
+    --solana-purple: #9945ff;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+    --gray-600: #4B5563;
+    --gray-700: #374151;
+    --gray-900: #111827;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--gray-900);
+    background-color: var(--gray-50);
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.tab-content {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Tab Navigation */
+.tab-btn {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.tab-btn:hover {
+    color: var(--gray-900);
+    border-color: var(--blt-red);
+}
+
+.tab-btn.active {
+    color: var(--gray-900);
+    border-color: var(--blt-red);
+}
+
+/* Table Styling */
+table thead th {
+    background-color: var(--gray-50);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: var(--gray-700);
+}
+
+table tbody tr {
+    border-bottom: 1px solid var(--gray-200);
+    transition: background-color 0.2s ease;
+}
+
+table tbody tr:hover {
+    background-color: var(--gray-50);
+}
+
+table tbody td {
+    padding: 1rem 1.5rem;
+    font-size: 14px;
+    color: var(--gray-900);
+}
+
+table tbody td.rank {
+    font-weight: 700;
+    color: var(--blt-red);
+}
+
+table tbody td.username {
+    font-weight: 600;
+    color: var(--gray-900);
+}
+
+table tbody td.wallet {
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--gray-600);
+    cursor: pointer;
+    user-select: none;
+}
+
+table tbody td.wallet:hover {
+    color: var(--blt-red);
+}
+
+/* Badge Styles */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-contributor {
+    background-color: #DBEAFE;
+    color: #1E40AF;
+}
+
+.badge-champion {
+    background-color: #FEE2E2;
+    color: var(--blt-red);
+}
+
+.badge-hero {
+    background-color: #E9D5FF;
+    color: var(--solana-purple);
+}
+
+.badge-legend {
+    background-color: #FEF3C7;
+    color: #92400E;
+}
+
+/* Stat Cards */
+.stat-card {
+    background: linear-gradient(135deg, rgba(225, 1, 1, 0.05) 0%, rgba(225, 1, 1, 0.02) 100%);
+    border: 1px solid rgba(225, 1, 1, 0.1);
+    border-radius: 8px;
+    padding: 24px;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(225, 1, 1, 0.1);
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 12px;
+}
+
+.stat-card .value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--blt-red);
+    margin-bottom: 8px;
+}
+
+.stat-card .label {
+    font-size: 12px;
+    color: var(--gray-600);
+}
+
+/* Tier Colors in Tables */
+.tier-contributor { color: #3B82F6; font-weight: 600; }
+.tier-champion { color: var(--blt-red); font-weight: 600; }
+.tier-hero { color: var(--solana-purple); font-weight: 600; }
+.tier-legend { color: #F59E0B; font-weight: 600; }
+
+/* Transaction Timeline */
+.transaction-item {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+    border-left: 3px solid var(--blt-red);
+}
+
+.transaction-item:hover {
+    background-color: var(--gray-50);
+}
+
+.transaction-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blt-red) 0%, var(--solana-purple) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+    font-size: 18px;
+}
+
+.transaction-content {
+    flex: 1;
+}
+
+.transaction-content .username {
+    font-weight: 600;
+    color: var(--gray-900);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.transaction-content .meta {
+    font-size: 12px;
+    color: var(--gray-600);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.transaction-link {
+    font-size: 12px;
+    color: var(--blt-red);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.transaction-link:hover {
+    color: var(--blt-red-hover);
+    text-decoration: underline;
+}
+
+/* Chart Container */
+.chart-container {
+    position: relative;
+    height: 320px;
+    width: 100%;
+}
+
+/* Buttons */
+button {
+    transition: all 0.3s ease;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--blt-red);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--blt-red-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(225, 1, 1, 0.3);
+}
+
+/* Select dropdowns */
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 12px;
+    padding-right: 2.5rem;
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    table {
+        font-size: 13px;
+    }
+
+    table th, table td {
+        padding: 0.75rem;
+    }
+
+    .stat-card .value {
+        font-size: 24px;
+    }
+
+    .tab-btn {
+        font-size: 14px;
+        padding: 12px 16px;
+    }
+
+    /* Mobile Table Card View Alternative */
+    @media (max-width: 640px) {
+        .table-responsive {
+            display: block;
+            width: 100%;
+        }
+
+        table {
+            display: block;
+            border: 0;
+        }
+
+        table thead {
+            display: none;
+        }
+
+        table tbody,
+        table tr,
+        table td {
+            display: block;
+            width: 100%;
+        }
+
+        table tr {
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        table td {
+            text-align: right;
+            padding-left: 50%;
+            position: relative;
+            padding: 0.75rem;
+            border: none;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        table td::before {
+            content: attr(data-label);
+            position: absolute;
+            left: 0.75rem;
+            font-weight: 600;
+            text-align: left;
+            width: 45%;
+            color: var(--gray-600);
+        }
+
+        table td:last-child {
+            border-bottom: none;
+        }
+    }
+}
+
+/* Utility Classes */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-in-out;
+}
+
+/* Responsive Grid */
+@media (max-width: 1024px) {
+    .grid-cols-1 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Print Styles */
+@media print {
+    nav, .chart-container, .transaction-item {
+        display: none;
+    }
+
+    body {
+        background: white;
+    }
+
+    table {
+        border: 1px solid #000;
+    }
+}
