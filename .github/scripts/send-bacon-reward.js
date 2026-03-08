@@ -274,8 +274,6 @@ async function main() {
   console.log(`Explorer: ${explorerUrl}`);
 
   // ── Record idempotency to prevent double-payment on rerun ──────────────────────
-  const idempotencyKey = `pr-${prNumber}-${contributorGH}`;
-  const idempotencyFile = path.join(__dirname, '..', `payout-${idempotencyKey}.txt`);
   try {
     fs.writeFileSync(idempotencyFile, txid, { mode: 0o644 });
     console.log(`Idempotency recorded: ${idempotencyFile}`);
