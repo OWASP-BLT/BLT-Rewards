@@ -91,11 +91,19 @@ function resolveRecipientWallet(contributorGithub) {
       console.warn(`Warning: could not parse contributors-wallets.json — ${e.message}`);
     }
     // Case-insensitive lookup
-    const normalizedGithub = contributorGithub.toLowerCase();
-    const entry = Object.entries(wallets).find(([user]) => user.toLowerCase() === normalizedGithub);
-    if (entry) {
-      console.log(`Found wallet for @${contributorGithub} (mapped as ${entry[0]}) in contributors-wallets.json`);
-      return new PublicKey(entry[1]);
+    if (wallets && typeof wallets === 'object') {
+      const normalizedGithub = contributorGithub.toLowerCase();
+      const entry = Object.entries(wallets).find(([user]) => user.toLowerCase() === normalizedGithub);
+      if (entry) {
+        try {
+          const addr = new PublicKey(entry[1]);
+          console.log(`Found wallet for @${contributorGithub} (mapped as ${entry[0]}) in contributors-wallets.json`);
+          return addr;
+        } catch (e) {
+          console.warn(`Warning: invalid wallet address for @${contributorGithub} in contributors-wallets.json — ${e.message}`);
+          // Fall through to Method 2
+        }
+      }
     }
   }
 
@@ -125,9 +133,24 @@ async function main() {
   const treasuryRaw = process.env.BACON_TREASURY_KEYPAIR;
   const mintStr = process.env.BACON_TOKEN_MINT;
   const contributorGH = process.env.CONTRIBUTOR_GITHUB || 'unknown';
-  const rewardAmountRaw = process.env.REWARD_AMOUNT || '10';
   const network = process.env.SOLANA_NETWORK || 'devnet';
   const prNumber = process.env.PR_NUMBER || '?';
+
+  // ── Validate REWARD_AMOUNT strictly (fail closed) ──────────────────────────────
+  const rewardAmountRaw = process.env.REWARD_AMOUNT;
+  if (!rewardAmountRaw || !/^\d+$/.test(rewardAmountRaw.trim())) {
+    console.error(`ERROR: REWARD_AMOUNT must be a positive integer. Got: "${rewardAmountRaw}"`);
+    setOutput('status', 'failed');
+    setOutput('reason', `Invalid REWARD_AMOUNT: ${rewardAmountRaw}`);
+    process.exit(1);
+  }
+  const rewardAmount = parseInt(rewardAmountRaw, 10);
+  if (rewardAmount <= 0) {
+    console.error(`ERROR: REWARD_AMOUNT must be > 0. Got: ${rewardAmount}`);
+    setOutput('status', 'failed');
+    setOutput('reason', `Invalid REWARD_AMOUNT: ${rewardAmount}`);
+    process.exit(1);
+  }
 
   // ── Validate required env vars ───────────────────────────────────────────────
   if (!treasuryRaw) {
@@ -155,13 +178,19 @@ async function main() {
   }
 
   const tokenMint = new PublicKey(mintStr);
-  const rewardAmount = parseInt(rewardAmountRaw, 10);
 
-  if (isNaN(rewardAmount) || rewardAmount <= 0) {
-    console.error(`ERROR: Invalid REWARD_AMOUNT: "${rewardAmountRaw}". Must be a positive integer.`);
-    setOutput('status', 'failed');
-    setOutput('reason', `Invalid REWARD_AMOUNT: ${rewardAmountRaw}`);
-    process.exit(1);
+  // ── Check idempotency: skip if this PR was already paid ───────────────────────
+  const idempotencyKey = `pr-${prNumber}-${contributorGH}`;
+  const idempotencyFile = path.join(__dirname, '..', `payout-${idempotencyKey}.txt`);
+  if (fs.existsSync(idempotencyFile)) {
+    const prevTxid = fs.readFileSync(idempotencyFile, 'utf8').trim();
+    console.log(`\n⚠️  Idempotency check: PR #${prNumber} was already paid to @${contributorGH}`);
+    console.log(`    Previous TXID: ${prevTxid}`);
+    console.log(`    Skipping duplicate payment.`);
+    setOutput('status', 'skipped');
+    setOutput('reason', 'Already paid');
+    setOutput('txid', prevTxid);
+    return;
   }
 
   console.log(`\n── BACON Reward Pipeline ──────────────────────────────────`);
@@ -196,7 +225,7 @@ async function main() {
 
   // ── Fetch mint info (decimals) ────────────────────────────────────────────────
   const mintInfo = await getMint(connection, tokenMint);
-  const rawAmount = BigInt(rewardAmount) * BigInt(10 ** mintInfo.decimals);
+  const rawAmount = BigInt(rewardAmount) * (BigInt(10) ** BigInt(mintInfo.decimals));
   console.log(`Token decimals: ${mintInfo.decimals}`);
   console.log(`Raw transfer amount: ${rawAmount}`);
 
@@ -248,6 +277,14 @@ async function main() {
   console.log(`\nTransaction confirmed!`);
   console.log(`TXID:     ${txid}`);
   console.log(`Explorer: ${explorerUrl}`);
+
+  // ── Record idempotency to prevent double-payment on rerun ──────────────────────
+  try {
+    fs.writeFileSync(idempotencyFile, txid, { mode: 0o644 });
+    console.log(`Idempotency recorded: ${idempotencyFile}`);
+  } catch (e) {
+    console.warn(`Warning: could not write idempotency file: ${e.message}`);
+  }
 
   // ── Write outputs ─────────────────────────────────────────────────────────────
   setOutput('status', 'success');
