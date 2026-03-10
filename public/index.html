@@ -710,7 +710,7 @@
                     }).join(' + ');
                 }
                 if (balEl) {
-                    balEl.textContent = data.balance !== undefined ? `Balance: ${data.balance} BACON` : 'Balance: N/A';
+                    balEl.textContent = data.balance !== undefined ? `Balance: ${data.balance}` : 'Balance: N/A';
                 }
             } catch (e) {
                 console.error('failed to load status', e);
