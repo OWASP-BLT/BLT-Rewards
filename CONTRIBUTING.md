@@ -114,8 +114,11 @@ Open `.env` and fill in your values:
 | `BITCOIN_RPC_PASSWORD` | RPC password for your Bitcoin node | Your `bitcoin.conf` |
 | `SOLANA_RPC_URL` | Solana RPC endpoint (e.g. `https://api.mainnet-beta.solana.com`) | [Solana docs](https://docs.solana.com/cluster/rpc-endpoints) or your RPC provider |
 | `SOLANA_WALLET_ADDRESS` | Your Solana wallet public key | Your Solana wallet |
+| `ORD_SERVER_URL_MAINNET` | URL where your ord-server is running | e.g. `http://localhost:9002` if running locally |
+| `TREASURY_ADDRESS` | (Optional) main wallet address to display on homepage | — |
 | `GITHUB_TOKEN` | Personal access token for GitHub Actions integration | GitHub → Settings → Developer Settings → Tokens |
 
+> **Note:** When `ORD_SERVER_URL_MAINNET` is set and the ord-server is reachable, the home page will display the real BTC/Runes wallet balance instead of a placeholder.
 ### Step 2 — Wrangler Variables (`wrangler.toml`)
 
 These are non-secret configuration values already in `wrangler.toml`. Update them as needed:
