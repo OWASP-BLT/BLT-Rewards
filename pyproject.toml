@@ -1,0 +1,8 @@
+[tool.pyright]
+include = ["src"]
+extraPaths = ["src"]
+typeCheckingMode = "basic"
+
+[tool.pylance]
+include = ["src"]
+extraPaths = ["src"]
