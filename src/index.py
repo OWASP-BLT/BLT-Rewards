@@ -45,7 +45,7 @@ async def on_fetch(request, env):
         if hasattr(env, 'TREASURY_ADDRESS'):
             data['address'] = env.TREASURY_ADDRESS
 
-        return Response.new(json.dumps(data), {'status': 200, 'headers': cors_headers})
+        return Response.new(json.dumps(data), {'status': 200, 'headers': {**cors_headers, 'Content-Type': 'application/json'}})
 
     # fall through to asset serving
     return None
