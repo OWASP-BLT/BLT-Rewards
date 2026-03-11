@@ -1,5 +1,6 @@
 """Main entry point for BLT-Rewards (BACON) - Cloudflare Worker"""
 
+import js
 from js import Response, URL
 import json
 
@@ -39,8 +40,12 @@ async def on_fetch(request, env):
                     body = await resp.json()
                     if isinstance(body, dict) and body.get('success'):
                         data['balance'] = body.get('balance', data['balance'])
-        except Exception:
-            pass
+        except Exception as e:
+            # log failure so we can debug if ord-server is unreachable
+            try:
+                js.console.error('status fetch failed', str(e))
+            except Exception:
+                pass
 
         if hasattr(env, 'TREASURY_ADDRESS'):
             data['address'] = env.TREASURY_ADDRESS
