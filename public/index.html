@@ -97,6 +97,7 @@
                             <i class="fab fa-bitcoin"></i> + <i class="fas fa-circle text-purple-500"></i>
                         </div>
                         <p id="chain-balance" class="text-sm text-gray-600">Loading balance…</p>
+                        <p id="chain-address" class="text-xs text-gray-500"></p>
                     </div>
                     <div class="text-center">
                         <div class="text-3xl font-bold text-blt-red mb-2">
@@ -711,6 +712,10 @@
                 }
                 if (balEl) {
                     balEl.textContent = data.balance !== undefined ? `Balance: ${data.balance}` : 'Balance: N/A';
+                }
+                const addrEl = document.getElementById('chain-address');
+                if (addrEl) {
+                    addrEl.textContent = data.address ? `Address: ${data.address}` : '';
                 }
             } catch (e) {
                 console.error('failed to load status', e);
