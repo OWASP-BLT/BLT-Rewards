@@ -35,22 +35,25 @@ async def on_fetch(request, env):
             ord_url = getattr(env, 'ORD_SERVER_URL_MAINNET', None)
             if ord_url:
                 ord_url = ord_url.rstrip('/') + '/mainnet/wallet-balance'
-                resp = await js.fetch(ord_url)
+                # add 5‑second timeout to avoid hanging
+                from js import AbortSignal
+                resp = await js.fetch(ord_url, {"signal": AbortSignal.timeout(5000)})
                 if resp.ok:
                     # convert JS proxy object to native Python dict
                     body = await resp.json()
                     try:
                         body = body.to_py()
                     except Exception:
-                        # fallback: parse text
-                        try:
-                            body = json.loads(await resp.text())
-                        except Exception:
-                            body = {}
+                        # fallback: treat as dict or empty
+                        if not isinstance(body, dict):
+                            try:
+                                body = json.loads(await resp.text())
+                            except Exception:
+                                body = {}
                     if isinstance(body, dict) and body.get('success'):
                         data['balance'] = body.get('balance', data['balance'])
         except Exception as e:
-            # log failure so we can debug if ord-server is unreachable
+            # log failure so we can debug if ord-server is unreachable or timeout
             try:
                 js.console.error('status fetch failed', str(e))
             except Exception:
