@@ -37,7 +37,16 @@ async def on_fetch(request, env):
                 ord_url = ord_url.rstrip('/') + '/mainnet/wallet-balance'
                 resp = await js.fetch(ord_url)
                 if resp.ok:
+                    # convert JS proxy object to native Python dict
                     body = await resp.json()
+                    try:
+                        body = body.to_py()
+                    except Exception:
+                        # fallback: parse text
+                        try:
+                            body = json.loads(await resp.text())
+                        except Exception:
+                            body = {}
                     if isinstance(body, dict) and body.get('success'):
                         data['balance'] = body.get('balance', data['balance'])
         except Exception as e:
