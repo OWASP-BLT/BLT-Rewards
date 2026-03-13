@@ -59,9 +59,10 @@ async def on_fetch(request, env):
             except Exception:
                 pass
 
-        if hasattr(env, 'TREASURY_ADDRESS'):
-            data['address'] = env.TREASURY_ADDRESS
-
+        #if hasattr(env, 'TREASURY_ADDRESS'):
+        #    data['address'] = env.TREASURY_ADDRESS
+        # tmp hardcode address
+        data['address'] = "mntjJdXMvLkALMnyYFsdvxUnFXjLzLPpiNQwQSC58BL"
         return Response.new(json.dumps(data), {'status': 200, 'headers': {**cors_headers, 'Content-Type': 'application/json'}})
 
     # fall through to asset serving
