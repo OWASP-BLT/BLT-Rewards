@@ -182,143 +182,135 @@ def validate_fee_rate(fee_rate) -> bool:
     return 1 <= float(fee_rate) <= 10000
 
 
-# ── Existing endpoints ────────────────────────────────────────────────────────
+def validate_live_auth(body: dict):
+    """Check password for non-dry-run transactions.
+
+    Returns (True, None) on success; (False, flask_response_tuple) on failure.
+    """
+    password = body.get("password")
+    if not password:
+        return False, (
+            jsonify({"success": False, "error": "Password is required for non-dry-run transactions"}),
+            401,
+        )
+    expected = os.getenv("WALLET_API_PASSWORD")
+    if not expected:
+        return False, (jsonify({"success": False, "error": "Live transactions are not configured"}), 503)
+    if not hmac.compare_digest(password, expected):
+        return False, (jsonify({"success": False, "error": "Invalid password"}), 401)
+    return True, None
+
+
+# ── Existing endpoints (improved) ────────────────────────────────────────────
+
+@app.route("/mainnet/send-bacon-tokens", methods=["POST"])
 def send_bacon_tokens():
     if not verify_webhook_signature(request):
         return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
 
-    yaml_content = request.json.get("yaml_content")
-    fee_rate = request.json.get("fee_rate")
-    is_dry_run = request.json.get("dry_run", True)
+    data = request.json or {}
+    yaml_content = data.get("yaml_content")
+    fee_rate = data.get("fee_rate")
+    is_dry_run = data.get("dry_run", True)
 
     if not yaml_content:
         return jsonify({"success": False, "error": "YAML content missing"}), 400
-    if not fee_rate or not isinstance(fee_rate, (int, float)):
-        return jsonify({"success": False, "error": "Valid fee_rate is required"}), 400
+    if not validate_fee_rate(fee_rate):
+        return jsonify({"success": False, "error": "fee_rate must be a number between 1 and 10000"}), 400
     if not is_dry_run:
-        password = request.json.get("password")
-        if not password:
-            return jsonify({"success": False, "error": "Password is required for non-dry-run transactions"}), 400
-        elif password != os.getenv("WALLET_API_PASSWORD"):
-            return jsonify({"success": False, "error": "Invalid password"}), 401
-    # Write YAML to a temporary file
-    with open(YAML_FILE_PATH, "w") as file:
-        file.write(yaml_content)
+        ok, err = validate_live_auth(data)
+        if not ok:
+            return err
 
-    command = [
-        "sudo",
-        ORD_PATH,
-        f"--bitcoin-rpc-username={BITCOIN_RPC_USER_MAINNET}",
-        f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_MAINNET}",
-        f"--bitcoin-rpc-url={BITCOIN_RPC_URL_MAINNET}",
-        "wallet",
-        f"--server-url={ORD_SERVER_URL_MAINNET}",
-        f"--name={WALLET_NAME_MAINNET}",
-        "split",
-        f"--splits={YAML_FILE_PATH}",
-        f"--fee-rate={fee_rate}",
-    ]
+    try:
+        tmp_path = write_temp_yaml(yaml_content)
+    except OSError as e:
+        return jsonify({"success": False, "error": f"Failed to write batch file: {e}"}), 500
 
+    command = (
+        make_base_command("mainnet")
+        + make_wallet_args("mainnet")
+        + ["split", f"--splits={tmp_path}", f"--fee-rate={fee_rate}"]
+    )
     if is_dry_run:
         command.append("--dry-run")
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        txid = result.stdout.strip()  # Extract the transaction ID from output
-        return jsonify({
-            "success": True,
-            "txid": txid,
-            "dry_run": is_dry_run
-        })
+        result = run_ord_command(command)
+        return jsonify({"success": True, "txid": result.stdout.strip(), "dry_run": is_dry_run})
     except subprocess.CalledProcessError as e:
-        return jsonify({
-            "success": False,
-            "error": e.stderr,
-            "dry_run": is_dry_run
-        })
+        return jsonify({"success": False, "error": sanitize_error(e.stderr), "dry_run": is_dry_run}), 500
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
 
 @app.route("/regtest/send-bacon-tokens", methods=["POST"])
 def send_bacon_tokens_regtest():
     if not verify_webhook_signature(request):
         return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
 
-    num_users = request.json.get("num_users")
-    fee_rate = request.json.get("fee_rate")
+    data = request.json or {}
+    num_users = data.get("num_users")
+    fee_rate = data.get("fee_rate")
 
-    if not num_users or not isinstance(num_users, int) or num_users <= 0:
+    if not isinstance(num_users, int) or num_users <= 0:
         return jsonify({"success": False, "error": "num_users must be a positive integer"}), 400
-    if not fee_rate or not isinstance(fee_rate, (int, float)):
-        return jsonify({"success": False, "error": "Valid fee_rate is required"}), 400
+    if not validate_fee_rate(fee_rate):
+        return jsonify({"success": False, "error": "fee_rate must be a number between 1 and 10000"}), 400
 
-    # Generate YAML batch transaction file
     yaml_data = {
         "outputs": [
-            {
-                "address": WALLET_ADDRESS_REGTEST,
-                "runes": {
-                    "BLT•BACON•TOKENS": 1
-                }
-            } for _ in range(num_users)
+            {"address": WALLET_ADDRESS_REGTEST, "runes": {"BLT•BACON•TOKENS": 1}}
+            for _ in range(num_users)
         ]
     }
 
-    with open(YAML_FILE_PATH, "w") as file:
-        yaml.dump(yaml_data, file, default_flow_style=False)
+    try:
+        tmp_path = write_temp_yaml(yaml.dump(yaml_data, default_flow_style=False))
+    except OSError as e:
+        return jsonify({"success": False, "error": f"Failed to write batch file: {e}"}), 500
 
-    # Run the transaction split command
-    command = [
-        "sudo",
-        ORD_PATH,
-        f"--bitcoin-rpc-username={BITCOIN_RPC_USER_REGTEST}",
-        f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_REGTEST}",
-        f"--bitcoin-rpc-url={BITCOIN_RPC_URL_REGTEST}",
-        "-r",
-        "wallet",
-        f"--server-url={ORD_SERVER_URL_REGTEST}",
-        f"--name={WALLET_NAME_REGTEST}",
-        "split",
-        f"--splits={YAML_FILE_PATH}",
-        f"--fee-rate={fee_rate}",
-        "--dry-run"
-    ]
+    command = (
+        make_base_command("regtest")
+        + make_wallet_args("regtest")
+        + ["split", f"--splits={tmp_path}", f"--fee-rate={fee_rate}", "--dry-run"]
+    )
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        txid = result.stdout.strip()  # Extract the transaction ID from output
-        return jsonify({"success": True, "txid": txid ,"dry_run": True})
+        result = run_ord_command(command)
+        return jsonify({"success": True, "txid": result.stdout.strip(), "dry_run": True})
     except subprocess.CalledProcessError as e:
-        return jsonify({"success": False, "error": e.stderr, "dry_run": True})
+        return jsonify({"success": False, "error": sanitize_error(e.stderr), "dry_run": True}), 500
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
 
 @app.route("/mainnet/wallet-balance", methods=["GET"])
 def wallet_balance():
     if not verify_webhook_signature(request):
         return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
 
-    command = [
-        "sudo",
-        ORD_PATH,
-        f"--bitcoin-rpc-username={BITCOIN_RPC_USER_MAINNET}",
-        f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_MAINNET}",
-        f"--bitcoin-rpc-url={BITCOIN_RPC_URL_MAINNET}",
-        f"--data-dir={BITCOIN_DATADIR_MAINNET}",
-        "wallet",
-        f"--server-url={ORD_SERVER_URL_MAINNET}",
-        f"--name={WALLET_NAME_MAINNET}",
-        "balance"
-    ]
+    command = (
+        make_base_command("mainnet")
+        + [f"--data-dir={BITCOIN_DATADIR_MAINNET}"]
+        + make_wallet_args("mainnet")
+        + ["balance"]
+    )
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        balance_output = result.stdout.strip()  # Extract the balance output from the command
-        return jsonify({
-            "success": True,
-            "balance": balance_output
-        })
+        result = run_ord_command(command)
+        return jsonify({"success": True, "balance": result.stdout.strip()})
     except subprocess.CalledProcessError as e:
-        return jsonify({
-            "success": False,
-            "error": e.stderr
-        })
+        return jsonify({"success": False, "error": sanitize_error(e.stderr)}), 500
+
+
+# ── Startup ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("FLASK_PORT", 9002)))
