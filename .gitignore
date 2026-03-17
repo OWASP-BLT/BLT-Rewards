@@ -10,6 +10,7 @@ PROJECT_INFO.md
 
 # Generated treasury keypair — NEVER commit this
 .github/scripts/bacon-treasury-keypair.json
+PROJECT_INFO.md
 node_modules/
 .wrangler/
 .dev.vars
