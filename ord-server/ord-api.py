@@ -59,7 +59,7 @@ YAML_FILE_PATH = os.getenv("YAML_FILE_PATH", "/blockchain/ord-flask-server/tmp-b
 # Bitcoin RPC Configuration for Mainnet
 BITCOIN_RPC_USER_MAINNET = os.getenv("BITCOIN_RPC_USER_MAINNET", "bitcoin_mainnet")
 BITCOIN_RPC_PASSWORD_MAINNET = os.getenv("BITCOIN_RPC_PASSWORD_MAINNET", "password_mainnet")
-BITCOIN_RPC_URL_MAINNET = os.getenv("BITCOIN_RPC_URL_MAINNET", "http://bitcoin-node-ip:18443")
+BITCOIN_RPC_URL_MAINNET = os.getenv("BITCOIN_RPC_URL_MAINNET", "http://bitcoin-node-ip:8332")
 BITCOIN_DATADIR_MAINNET = os.getenv("BITCOIN_DATADIR_MAINNET", "/blockchain/bitcoin/data")
 
 # Bitcoin RPC Configuration for Regtest
@@ -142,7 +142,47 @@ def write_temp_yaml(content: str) -> str:
     return tmp_path
 
 
-@app.route("/mainnet/send-bacon-tokens", methods=["POST"])
+def make_base_command(network: str = "mainnet") -> list:
+    """Return the ord invocation prefix for the given network."""
+    if network == "mainnet":
+        return [
+            "sudo", ORD_PATH,
+            f"--bitcoin-rpc-username={BITCOIN_RPC_USER_MAINNET}",
+            f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_MAINNET}",
+            f"--bitcoin-rpc-url={BITCOIN_RPC_URL_MAINNET}",
+        ]
+    return [
+        "sudo", ORD_PATH,
+        f"--bitcoin-rpc-username={BITCOIN_RPC_USER_REGTEST}",
+        f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_REGTEST}",
+        f"--bitcoin-rpc-url={BITCOIN_RPC_URL_REGTEST}",
+        "-r",
+    ]
+
+
+def make_wallet_args(network: str = "mainnet") -> list:
+    """Return the ord wallet sub-command args for the given network."""
+    if network == "mainnet":
+        return [
+            "wallet",
+            f"--server-url={ORD_SERVER_URL_MAINNET}",
+            f"--name={WALLET_NAME_MAINNET}",
+        ]
+    return [
+        "wallet",
+        f"--server-url={ORD_SERVER_URL_REGTEST}",
+        f"--name={WALLET_NAME_REGTEST}",
+    ]
+
+
+def validate_fee_rate(fee_rate) -> bool:
+    """Return True when fee_rate is a number in the acceptable range (1-10000)."""
+    if not isinstance(fee_rate, (int, float)):
+        return False
+    return 1 <= float(fee_rate) <= 10000
+
+
+# ── Existing endpoints ────────────────────────────────────────────────────────
 def send_bacon_tokens():
     if not verify_webhook_signature(request):
         return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
