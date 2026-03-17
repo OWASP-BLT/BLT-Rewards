@@ -310,6 +310,106 @@ def wallet_balance():
         return jsonify({"success": False, "error": sanitize_error(e.stderr)}), 500
 
 
+# ── Rune etching (creation) ───────────────────────────────────────────────────
+
+def _etch_rune(network: str):
+    """Shared handler for mainnet and regtest Rune etching."""
+    if not verify_webhook_signature(request):
+        return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
+
+    data = request.json or {}
+    rune_name = data.get("rune_name")
+    symbol = data.get("symbol")
+    divisibility = data.get("divisibility", 0)
+    premine = data.get("premine")
+    fee_rate = data.get("fee_rate")
+    is_dry_run = data.get("dry_run", True)
+    turbo = data.get("turbo", False)
+    mint_cap = data.get("mint_cap")
+    mint_amount = data.get("mint_amount")
+    mint_height_start = data.get("mint_height_start")
+    mint_height_end = data.get("mint_height_end")
+    mint_offset_start = data.get("mint_offset_start")
+    mint_offset_end = data.get("mint_offset_end")
+
+    if not rune_name or not isinstance(rune_name, str):
+        return jsonify({"success": False, "error": "rune_name is required"}), 400
+    if not symbol or not isinstance(symbol, str) or len(symbol) != 1:
+        return jsonify({"success": False, "error": "symbol must be exactly one character"}), 400
+    if not isinstance(divisibility, int) or not (0 <= divisibility <= 38):
+        return jsonify({"success": False, "error": "divisibility must be an integer between 0 and 38"}), 400
+    if not validate_fee_rate(fee_rate):
+        return jsonify({"success": False, "error": "fee_rate must be a number between 1 and 10000"}), 400
+
+    has_open_mint = mint_cap is not None or mint_amount is not None
+    if premine is None and not has_open_mint:
+        return jsonify({
+            "success": False,
+            "error": "Supply must be defined via premine, open-mint terms (mint_cap/mint_amount), or both",
+        }), 400
+
+    if not is_dry_run:
+        ok, err = validate_live_auth(data)
+        if not ok:
+            return err
+
+    command = (
+        make_base_command(network)
+        + make_wallet_args(network)
+        + [
+            "etch",
+            f"--rune={rune_name}",
+            f"--symbol={symbol}",
+            f"--divisibility={divisibility}",
+            f"--fee-rate={fee_rate}",
+        ]
+    )
+
+    if premine is not None:
+        command.append(f"--premine={premine}")
+    if mint_cap is not None:
+        command.append(f"--terms-cap={mint_cap}")
+    if mint_amount is not None:
+        command.append(f"--terms-amount={mint_amount}")
+    if mint_height_start is not None:
+        command.append(f"--terms-height-start={mint_height_start}")
+    if mint_height_end is not None:
+        command.append(f"--terms-height-end={mint_height_end}")
+    if mint_offset_start is not None:
+        command.append(f"--terms-offset-start={mint_offset_start}")
+    if mint_offset_end is not None:
+        command.append(f"--terms-offset-end={mint_offset_end}")
+    if turbo:
+        command.append("--turbo")
+    if is_dry_run:
+        command.append("--dry-run")
+
+    try:
+        result = run_ord_command(command)
+        return jsonify({
+            "success": True,
+            "output": result.stdout.strip(),
+            "rune_name": rune_name,
+            "dry_run": is_dry_run,
+        })
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "success": False,
+            "error": sanitize_error(e.stderr),
+            "dry_run": is_dry_run,
+        }), 500
+
+
+@app.route("/mainnet/etch-rune", methods=["POST"])
+def etch_rune_mainnet():
+    return _etch_rune("mainnet")
+
+
+@app.route("/regtest/etch-rune", methods=["POST"])
+def etch_rune_regtest():
+    return _etch_rune("regtest")
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
