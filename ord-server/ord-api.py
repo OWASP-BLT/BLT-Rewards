@@ -410,6 +410,69 @@ def etch_rune_regtest():
     return _etch_rune("regtest")
 
 
+# ── Rune minting (open-mint claim) ───────────────────────────────────────────
+
+def _mint_rune(network: str):
+    """Shared handler for mainnet and regtest Rune minting."""
+    if not verify_webhook_signature(request):
+        return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
+
+    data = request.json or {}
+    rune_name = data.get("rune_name")
+    fee_rate = data.get("fee_rate")
+    is_dry_run = data.get("dry_run", True)
+    postage = data.get("postage")
+    destination = data.get("destination")
+
+    if not rune_name or not isinstance(rune_name, str):
+        return jsonify({"success": False, "error": "rune_name is required"}), 400
+    if not validate_fee_rate(fee_rate):
+        return jsonify({"success": False, "error": "fee_rate must be a number between 1 and 10000"}), 400
+
+    if not is_dry_run:
+        ok, err = validate_live_auth(data)
+        if not ok:
+            return err
+
+    command = (
+        make_base_command(network)
+        + make_wallet_args(network)
+        + ["mint", f"--rune={rune_name}", f"--fee-rate={fee_rate}"]
+    )
+
+    if postage:
+        command.append(f"--postage={postage}")
+    if destination:
+        command.append(f"--destination={destination}")
+    if is_dry_run:
+        command.append("--dry-run")
+
+    try:
+        result = run_ord_command(command)
+        return jsonify({
+            "success": True,
+            "output": result.stdout.strip(),
+            "rune_name": rune_name,
+            "dry_run": is_dry_run,
+        })
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "success": False,
+            "error": sanitize_error(e.stderr),
+            "dry_run": is_dry_run,
+        }), 500
+
+
+@app.route("/mainnet/mint-rune", methods=["POST"])
+def mint_rune_mainnet():
+    return _mint_rune("mainnet")
+
+
+@app.route("/regtest/mint-rune", methods=["POST"])
+def mint_rune_regtest():
+    return _mint_rune("regtest")
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
