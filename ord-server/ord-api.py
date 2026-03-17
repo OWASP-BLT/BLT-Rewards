@@ -200,7 +200,11 @@ def validate_live_auth(body: dict):
             jsonify({"success": False, "error": "Password is required for non-dry-run transactions"}),
             401,
         )
-    if password != os.getenv("WALLET_API_PASSWORD"):
+    expected = os.getenv("WALLET_API_PASSWORD")
+    if not expected:
+        # No password configured – reject all live transactions for safety.
+        return False, (jsonify({"success": False, "error": "Live transactions are not configured"}), 503)
+    if not hmac.compare_digest(password, expected):
         return False, (jsonify({"success": False, "error": "Invalid password"}), 401)
     return True, None
 
