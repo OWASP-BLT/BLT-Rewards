@@ -5,8 +5,7 @@ import time
 import hmac
 import hashlib
 import yaml
-import hmac
-import hashlib
+import requests
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 
@@ -471,6 +470,84 @@ def mint_rune_mainnet():
 @app.route("/regtest/mint-rune", methods=["POST"])
 def mint_rune_regtest():
     return _mint_rune("regtest")
+
+
+# ── Transaction verification ──────────────────────────────────────────────────
+
+def bitcoin_rpc(method: str, params: list, network: str = "mainnet"):
+    """Make a JSON-RPC 1.0 call to the Bitcoin node."""
+    if network == "mainnet":
+        url = BITCOIN_RPC_URL_MAINNET
+        auth = (BITCOIN_RPC_USER_MAINNET, BITCOIN_RPC_PASSWORD_MAINNET)
+    else:
+        url = BITCOIN_RPC_URL_REGTEST
+        auth = (BITCOIN_RPC_USER_REGTEST, BITCOIN_RPC_PASSWORD_REGTEST)
+    payload = {"jsonrpc": "1.0", "id": "ord-api", "method": method, "params": params}
+    resp = requests.post(url, json=payload, auth=auth, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("error"):
+        raise ValueError(f"Bitcoin RPC error: {data['error']['message']}")
+    return data["result"]
+
+
+def ord_server_tx(txid: str, network: str = "mainnet") -> dict:
+    """Query the ord server REST API for Runes-specific transaction data."""
+    base_url = ORD_SERVER_URL_MAINNET if network == "mainnet" else ORD_SERVER_URL_REGTEST
+    try:
+        resp = requests.get(f"{base_url}/tx/{txid}", headers={"Accept": "application/json"}, timeout=15)
+        if resp.ok:
+            return resp.json()
+    except requests.RequestException:
+        pass
+    return {}
+
+
+def _verify_transaction(network: str):
+    """Shared handler for mainnet and regtest transaction verification."""
+    if not verify_webhook_signature(request):
+        return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
+
+    txid = request.args.get("txid", "").strip()
+    if not txid or len(txid) != 64 or not all(c in "0123456789abcdefABCDEF" for c in txid):
+        return jsonify({"success": False, "error": "txid must be a 64-character hex string"}), 400
+
+    try:
+        tx = bitcoin_rpc("getrawtransaction", [txid, True], network)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+    except requests.RequestException as e:
+        return jsonify({"success": False, "error": f"Failed to reach Bitcoin node: {e}"}), 502
+
+    confirmations = tx.get("confirmations", 0)
+    block_hash = tx.get("blockhash")
+    block_height = None
+    if block_hash:
+        try:
+            block_height = bitcoin_rpc("getblockheader", [block_hash], network).get("height")
+        except (ValueError, requests.RequestException):
+            pass
+
+    status = "mempool" if confirmations == 0 else "confirming" if confirmations < 6 else "confirmed"
+    response = {
+        "success": True, "txid": txid, "status": status,
+        "confirmations": confirmations, "block_hash": block_hash,
+        "block_height": block_height, "network": network,
+    }
+    runes_data = ord_server_tx(txid, network)
+    if runes_data:
+        response["runes"] = runes_data.get("runes") or runes_data.get("inscription")
+    return jsonify(response)
+
+
+@app.route("/mainnet/verify-transaction", methods=["GET"])
+def verify_transaction_mainnet():
+    return _verify_transaction("mainnet")
+
+
+@app.route("/regtest/verify-transaction", methods=["GET"])
+def verify_transaction_regtest():
+    return _verify_transaction("regtest")
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────
