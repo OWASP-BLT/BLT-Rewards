@@ -93,10 +93,11 @@
                 <!-- Stats -->
                 <div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto">
                     <div class="text-center">
-                        <div class="text-3xl font-bold text-blt-red mb-2">
+                        <div id="chain-icons" class="text-3xl font-bold text-blt-red mb-2">
                             <i class="fab fa-bitcoin"></i> + <i class="fas fa-circle text-purple-500"></i>
                         </div>
-                        <p class="text-sm text-gray-600">Multi-Chain Support</p>
+                        <p id="chain-balance" class="text-sm text-gray-600">Loading balance…</p>
+                        <p id="chain-address" class="text-xs text-gray-500"></p>
                     </div>
                     <div class="text-center">
                         <div class="text-3xl font-bold text-blt-red mb-2">
@@ -692,5 +693,35 @@
             </div>
         </div>
     </footer>
+    <script>
+        // fetch chain names and main wallet balance from worker API
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/status');
+                if (!res.ok) throw new Error('network');
+                const data = await res.json();
+                const iconEl = document.getElementById('chain-icons');
+                const balEl = document.getElementById('chain-balance');
+                if (iconEl && data.chains) {
+                    iconEl.innerHTML = data.chains.map(c => {
+                        const lc = c.toLowerCase();
+                        if (lc === 'bitcoin') return '<i class="fab fa-bitcoin"></i>';
+                        if (lc === 'solana') return '<i class="fas fa-circle text-purple-500"></i>';
+                        return c;
+                    }).join(' + ');
+                }
+                if (balEl) {
+                    balEl.textContent = data.balance !== undefined ? `Balance: ${data.balance}` : 'Balance: N/A';
+                }
+                const addrEl = document.getElementById('chain-address');
+                if (addrEl) {
+                    addrEl.textContent = data.address ? `Address: ${data.address}` : '';
+                }
+            } catch (e) {
+                console.error('failed to load status', e);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', updateStatus);
+    </script>
 </body>
 </html>
