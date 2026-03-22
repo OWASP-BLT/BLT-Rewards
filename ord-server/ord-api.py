@@ -1,5 +1,7 @@
 import subprocess
 import os
+import uuid
+import time
 import hmac
 import hashlib
 import yaml
@@ -57,7 +59,7 @@ YAML_FILE_PATH = os.getenv("YAML_FILE_PATH", "/blockchain/ord-flask-server/tmp-b
 # Bitcoin RPC Configuration for Mainnet
 BITCOIN_RPC_USER_MAINNET = os.getenv("BITCOIN_RPC_USER_MAINNET", "bitcoin_mainnet")
 BITCOIN_RPC_PASSWORD_MAINNET = os.getenv("BITCOIN_RPC_PASSWORD_MAINNET", "password_mainnet")
-BITCOIN_RPC_URL_MAINNET = os.getenv("BITCOIN_RPC_URL_MAINNET", "http://bitcoin-node-ip:18443")
+BITCOIN_RPC_URL_MAINNET = os.getenv("BITCOIN_RPC_URL_MAINNET", "http://bitcoin-node-ip:8332")
 BITCOIN_DATADIR_MAINNET = os.getenv("BITCOIN_DATADIR_MAINNET", "/blockchain/bitcoin/data")
 
 # Bitcoin RPC Configuration for Regtest
@@ -75,8 +77,112 @@ WALLET_NAME_MAINNET = os.getenv("WALLET_NAME_MAINNET", "master-wallet")
 WALLET_NAME_REGTEST = os.getenv("WALLET_NAME_REGTEST", "regtest-wallet")
 WALLET_ADDRESS_REGTEST = os.getenv("WALLET_ADDRESS_REGTEST", "bcrt1")
 
+# Keywords indicating a transient ord/RPC failure worth retrying.
+_TRANSIENT_ERROR_KEYWORDS = [
+    "connection refused",
+    "timed out",
+    "temporarily unavailable",
+    "service unavailable",
+    "connection reset",
+    "network unreachable",
+    "could not connect",
+    "broken pipe",
+]
 
-@app.route("/mainnet/send-bacon-tokens", methods=["POST"])
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_transient_error(stderr: str) -> bool:
+    """Return True if stderr suggests a transient infrastructure failure."""
+    lower = stderr.lower()
+    return any(kw in lower for kw in _TRANSIENT_ERROR_KEYWORDS)
+
+
+def run_ord_command(command: list, max_retries: int = 3, retry_delay: float = 2.0):
+    """Run an ord CLI command with exponential-backoff retry on transient errors.
+
+    Returns the CompletedProcess on success; raises subprocess.CalledProcessError
+    on final failure.
+    """
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            return subprocess.run(command, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            last_exc = e
+            if attempt < max_retries - 1 and _is_transient_error(e.stderr):
+                time.sleep(retry_delay * (2 ** attempt))
+                continue
+            break
+    raise last_exc
+
+
+def sanitize_error(stderr: str) -> str:
+    """Strip sensitive values from stderr before sending it to the caller."""
+    for secret in [
+        BITCOIN_RPC_PASSWORD_MAINNET,
+        BITCOIN_RPC_PASSWORD_REGTEST,
+        os.getenv("WALLET_API_PASSWORD", ""),
+    ]:
+        if secret:
+            stderr = stderr.replace(secret, "[REDACTED]")
+    return stderr.strip()
+
+
+def write_temp_yaml(content: str) -> str:
+    """Write content to a uniquely named temp file and return its path.
+
+    Using a UUID suffix avoids race conditions when concurrent requests
+    share the same YAML_FILE_PATH directory.
+    """
+    base_dir = os.path.dirname(YAML_FILE_PATH) or "/tmp"
+    tmp_path = os.path.join(base_dir, f"batch-{uuid.uuid4().hex}.yaml")
+    with open(tmp_path, "w") as f:
+        f.write(content)
+    return tmp_path
+
+
+def make_base_command(network: str = "mainnet") -> list:
+    """Return the ord invocation prefix for the given network."""
+    if network == "mainnet":
+        return [
+            "sudo", ORD_PATH,
+            f"--bitcoin-rpc-username={BITCOIN_RPC_USER_MAINNET}",
+            f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_MAINNET}",
+            f"--bitcoin-rpc-url={BITCOIN_RPC_URL_MAINNET}",
+        ]
+    return [
+        "sudo", ORD_PATH,
+        f"--bitcoin-rpc-username={BITCOIN_RPC_USER_REGTEST}",
+        f"--bitcoin-rpc-password={BITCOIN_RPC_PASSWORD_REGTEST}",
+        f"--bitcoin-rpc-url={BITCOIN_RPC_URL_REGTEST}",
+        "-r",
+    ]
+
+
+def make_wallet_args(network: str = "mainnet") -> list:
+    """Return the ord wallet sub-command args for the given network."""
+    if network == "mainnet":
+        return [
+            "wallet",
+            f"--server-url={ORD_SERVER_URL_MAINNET}",
+            f"--name={WALLET_NAME_MAINNET}",
+        ]
+    return [
+        "wallet",
+        f"--server-url={ORD_SERVER_URL_REGTEST}",
+        f"--name={WALLET_NAME_REGTEST}",
+    ]
+
+
+def validate_fee_rate(fee_rate) -> bool:
+    """Return True when fee_rate is a number in the acceptable range (1-10000)."""
+    if not isinstance(fee_rate, (int, float)):
+        return False
+    return 1 <= float(fee_rate) <= 10000
+
+
+# ── Existing endpoints ────────────────────────────────────────────────────────
 def send_bacon_tokens():
     if not verify_webhook_signature(request):
         return jsonify({"success": False, "error": "Invalid or missing webhook signature"}), 401
