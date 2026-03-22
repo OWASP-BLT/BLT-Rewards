@@ -1,41 +1,62 @@
-"""Main entry point for BLT-Rewards (BACON) - Cloudflare Worker"""
+"""BLT-Rewards Cloudflare Worker – public API gateway + static site host."""
 
-from js import Response, URL
+import hmac
+import hashlib
+import json
+from js import Response, URL, fetch
+
+
+def _json_error(message: str, status: int) -> Response:
+    """Return a JSON error response."""
+    return Response.new(
+        json.dumps({"success": False, "error": message}),
+        {"status": status, "headers": {"Content-Type": "application/json"}},
+    )
+
+
+def _verify_signature(body: bytes, signature_header: str, secret: str) -> bool:
+    """Constant-time HMAC-SHA256 check against X-Signature-256 header."""
+    if not signature_header.startswith("sha256="):
+        return False
+    expected_hex = signature_header[len("sha256="):]
+    if len(expected_hex) != 64:
+        return False
+    try:
+        expected_bytes = bytes.fromhex(expected_hex)
+    except ValueError:
+        return False
+    computed = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
+    return hmac.compare_digest(expected_bytes, computed)
 
 
 async def on_fetch(request, env):
-    """Main request handler"""
+    """Route traffic: serve static site or proxy authenticated API calls."""
     url = URL.new(request.url)
     path = url.pathname
-    
-    # CORS headers
-    cors_headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-    }
-    
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        return Response.new('', {'headers': cors_headers})
-    
-    # Redirect root path to index.html
-    # Static assets are served directly by Cloudflare's asset handling configured in wrangler.toml
-    if path == '/':
-        return Response.new('', {
-            'status': 302,
-            'headers': {
-                **cors_headers,
-                'Location': '/index.html'
-            }
-        })
-    
-    # API routes can be added here
-    # Example:
-    # if path.startswith('/api/'):
-    #     return handle_api_request(request, env)
-    
-    # All other routes (including /index.html and other static files) 
-    # are handled by Cloudflare's static asset serving
-    # Return None to let Cloudflare serve the static asset
-    return None
+
+    # ── Static site ──────────────────────────────────────────────────────────
+    if not (path.startswith("/mainnet/") or path.startswith("/regtest/")):
+        if path == "/":
+            return Response.new("", {"status": 302, "headers": {"Location": "/index.html"}})
+        return None  # Cloudflare serves the static asset directly
+
+    # ── API routes: verify signature then proxy to private ord backend ────────
+    secret = getattr(env, "WEBHOOK_SECRET", None)
+    backend_url = getattr(env, "ORD_BACKEND_URL", None)
+
+    if not secret:
+        return _json_error("Webhook secret not configured on server", 500)
+    if not backend_url:
+        return _json_error("Backend service not configured", 500)
+
+    body_text = await request.text()
+    signature = request.headers.get("X-Signature-256", "")
+
+    if not _verify_signature(body_text.encode("utf-8"), signature, secret):
+        return _json_error("Invalid or missing webhook signature", 401)
+
+    query = f"?{url.search}" if url.search else ""
+    return await fetch(
+        f"{backend_url}{path}{query}",
+        {"method": request.method, "headers": {"Content-Type": "application/json"}, "body": body_text},
+    )
