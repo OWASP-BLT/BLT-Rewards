@@ -1,24 +1,33 @@
 """Main entry point for BLT-Rewards (BACON) - Cloudflare Worker"""
 
 from js import Response, URL
+from slack_handler import handle_bacon_command
 
 
 async def on_fetch(request, env):
     """Main request handler"""
     url = URL.new(request.url)
     path = url.pathname
-    
+
     # CORS headers
     cors_headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
     }
-    
+
     # Handle CORS preflight
     if request.method == 'OPTIONS':
         return Response.new('', {'headers': cors_headers})
-    
+
+    # ------------------------------------------------------------------
+    # Slack slash-command: POST /api/slack/bacon
+    # Configure your Slack app's slash command URL to point here.
+    # See public/getting-started.html for setup instructions.
+    # ------------------------------------------------------------------
+    if path == '/api/slack/bacon' and request.method == 'POST':
+        return await handle_bacon_command(request, env)
+
     # Redirect root path to index.html
     # Static assets are served directly by Cloudflare's asset handling configured in wrangler.toml
     if path == '/':
@@ -29,13 +38,8 @@ async def on_fetch(request, env):
                 'Location': '/index.html'
             }
         })
-    
-    # API routes can be added here
-    # Example:
-    # if path.startswith('/api/'):
-    #     return handle_api_request(request, env)
-    
-    # All other routes (including /index.html and other static files) 
+
+    # All other routes (including /index.html and other static files)
     # are handled by Cloudflare's static asset serving
     # Return None to let Cloudflare serve the static asset
     return None

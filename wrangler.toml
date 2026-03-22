@@ -5,6 +5,28 @@ compatibility_flags = ["python_workers"]
 
 [vars]
 ENVIRONMENT = "production"
+# Comma-separated Slack user IDs that are always treated as admins regardless
+# of D1 / Slack API checks. Useful for bootstrapping before any DB rows exist.
+# Example: ADMIN_USER_IDS = "U012AB3CD,U098ZY7WX"
+ADMIN_USER_IDS = ""
+
+# Slack secrets – set these via `wrangler secret put SLACK_SIGNING_SECRET`
+# and `wrangler secret put SLACK_BOT_TOKEN`.
+# Never commit real values here; use `wrangler secret put` or the dashboard.
+
+# ---------------------------------------------------------------------------
+# D1 Database – stores BACON transfers and the approved-user allowlist.
+# Steps:
+#   1. wrangler d1 create blt-bacon-db          (run once – note the id)
+#   2. Replace "YOUR_DATABASE_ID" below with the printed database_id.
+#   3. wrangler d1 execute blt-bacon-db --file=migrations/0001_init.sql
+#   4. wrangler deploy
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding      = "DB"
+database_name = "blt-bacon-db"
+database_id  = "a3604ec0-f8af-49a3-bde5-d196f16f30b2"
+migrations_dir = "migrations"
 
 # Configure assets (static files)
 # All files in ./public are automatically served by Cloudflare
