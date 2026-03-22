@@ -1,5 +1,7 @@
 import subprocess
 import os
+import uuid
+import time
 import hmac
 import hashlib
 import yaml
@@ -74,6 +76,70 @@ ORD_SERVER_URL_REGTEST = os.getenv("ORD_SERVER_URL_REGTEST", "http://regtest-ser
 WALLET_NAME_MAINNET = os.getenv("WALLET_NAME_MAINNET", "master-wallet")
 WALLET_NAME_REGTEST = os.getenv("WALLET_NAME_REGTEST", "regtest-wallet")
 WALLET_ADDRESS_REGTEST = os.getenv("WALLET_ADDRESS_REGTEST", "bcrt1")
+
+# Keywords indicating a transient ord/RPC failure worth retrying.
+_TRANSIENT_ERROR_KEYWORDS = [
+    "connection refused",
+    "timed out",
+    "temporarily unavailable",
+    "service unavailable",
+    "connection reset",
+    "network unreachable",
+    "could not connect",
+    "broken pipe",
+]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_transient_error(stderr: str) -> bool:
+    """Return True if stderr suggests a transient infrastructure failure."""
+    lower = stderr.lower()
+    return any(kw in lower for kw in _TRANSIENT_ERROR_KEYWORDS)
+
+
+def run_ord_command(command: list, max_retries: int = 3, retry_delay: float = 2.0):
+    """Run an ord CLI command with exponential-backoff retry on transient errors.
+
+    Returns the CompletedProcess on success; raises subprocess.CalledProcessError
+    on final failure.
+    """
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            return subprocess.run(command, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            last_exc = e
+            if attempt < max_retries - 1 and _is_transient_error(e.stderr):
+                time.sleep(retry_delay * (2 ** attempt))
+                continue
+            break
+    raise last_exc
+
+
+def sanitize_error(stderr: str) -> str:
+    """Strip sensitive values from stderr before sending it to the caller."""
+    for secret in [
+        BITCOIN_RPC_PASSWORD_MAINNET,
+        BITCOIN_RPC_PASSWORD_REGTEST,
+        os.getenv("WALLET_API_PASSWORD", ""),
+    ]:
+        if secret:
+            stderr = stderr.replace(secret, "[REDACTED]")
+    return stderr.strip()
+
+
+def write_temp_yaml(content: str) -> str:
+    """Write content to a uniquely named temp file and return its path.
+
+    Using a UUID suffix avoids race conditions when concurrent requests
+    share the same YAML_FILE_PATH directory.
+    """
+    base_dir = os.path.dirname(YAML_FILE_PATH) or "/tmp"
+    tmp_path = os.path.join(base_dir, f"batch-{uuid.uuid4().hex}.yaml")
+    with open(tmp_path, "w") as f:
+        f.write(content)
+    return tmp_path
 
 
 @app.route("/mainnet/send-bacon-tokens", methods=["POST"])

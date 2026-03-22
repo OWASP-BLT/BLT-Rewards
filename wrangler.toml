@@ -5,6 +5,9 @@ compatibility_flags = ["python_workers"]
 
 [vars]
 ENVIRONMENT = "production"
+# URL of the private ord backend service (Flask server on your ord node)
+# Set via: npx wrangler secret put ORD_BACKEND_URL
+ORD_BACKEND_URL = "https://your-ord-backend.example.com"
 
 # Configure assets (static files)
 # All files in ./public are automatically served by Cloudflare
